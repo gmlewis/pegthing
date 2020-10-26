@@ -1,5 +1,4 @@
 (ns pegthing.core
-  (require [clojure.set :as set])
   (:gen-class))
 
 (declare successful-move prompt-move game-over prompt-rows)
@@ -137,10 +136,31 @@
 ;;;;
 ;; Represent board textually and print it
 ;;;;
-(def alpha-start 97)
-(def alpha-end 123)
-(def letters (map (comp str char) (range alpha-start alpha-end)))
-(def pos-chars 3)
+(def lower-alpha-start 97)
+(def lower-alpha-end 123)
+(def upper-alpha-start 65)
+(def upper-alpha-end 91)
+(def single-letters (map (comp str char) (into (into [] (range lower-alpha-start lower-alpha-end)) (range upper-alpha-start upper-alpha-end))))
+(defn add-int-suffix
+  [suffix]
+  (into [] (map #(str % (str suffix)) single-letters))
+  )
+(def letters
+  (flatten
+   (reduce conj [] [
+                    (into [] single-letters)
+                    (map add-int-suffix (range 1 10))
+                    ]
+           )
+   )
+  )
+(def letters-map
+  (reduce (fn [x y]
+            (into x {y (inc (count x))})
+            ) {} letters
+          )
+  )
+(def pos-chars 4)
 
 (def ansi-styles
   {:red   "[31m"
@@ -158,9 +178,19 @@
   [text color]
   (str (ansi color) text (ansi :reset)))
 
+(defn render-letter
+  [pos]
+  (let [letter (nth letters (dec pos))]
+    (if (= (count letter) 1)
+      (str letter " ")
+      letter
+      )
+    )
+  )
+
 (defn render-pos
   [board pos]
-  (str (nth letters (dec pos))
+  (str (render-letter pos)
        (if (get-in board [pos :pegged])
          (colorize "0" :blue)
          (colorize "-" :red))))
@@ -193,7 +223,8 @@
 (defn letter->pos
   "Converts a letter string to the corresponding position number"
   [letter]
-  (inc (- (int (first letter)) alpha-start)))
+  (get letters-map letter)
+  )
 
 (defn get-input
   "Waits for user to enter text and hit enter, then cleans the input"
@@ -202,19 +233,20 @@
      (let [input (clojure.string/trim (read-line))]
        (if (empty? input)
          default
-         (clojure.string/lower-case input)))))
+         input
+         ))))
 
 (defn characters-as-strings
   "Given a string, return a collection consisting of each individual
   character"
   [string]
-  (re-seq #"[a-zA-Z]" string))
+  (re-seq #"[a-zA-Z]\d?" string))
 
 (defn prompt-move
   [board]
   (println "\nHere's your board:")
   (print-board board)
-  (println "Move from where to where? Enter two letters:")
+  (println "Move from where to where? Enter two peg names:")
   (let [input (map letter->pos (characters-as-strings (get-input)))]
     (if-let [new-board (make-move board (first input) (second input))]
       (successful-move new-board)
